@@ -1,7 +1,9 @@
 import React from "react";
 import { View, StyleSheet, Platform,KeyboardAvoidingView, } from 'react-native';
-import { Bubble, GiftedChat } from "react-native-gifted-chat";
+import { Bubble, GiftedChat, InputToolbar } from "react-native-gifted-chat";
 import firebase from 'firebase';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from '@react-native-community/netinfo';
 
 // const firebase = require('firebase');
 // require('firebase/firestore')
@@ -57,9 +59,42 @@ export default class Chat extends React.Component {
     });
   }
   
+  async getMessages() {
+    let messages = '';
+    try {
+      messages = await AsyncStorage.getItem('messages') || [];
+      this.setState({
+        messages: JSON.parse(messages)
+      });
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  async saveMessages() {
+    try {
+      await AsyncStorage.setItem('messages', JSON.stringify(this.state.messages));
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+  async deleteMessages() {
+    try {
+      await AsyncStorage.removeItem('messages');
+      this.setState({
+        messages: []
+      })
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+
+
   componentDidMount() {
     let { name } = this.props.route.params;
     this.props.navigation.setOptions({ title: name });
+    this.getMessages();
 
     this.referenceChatMessages = firebase.firestore().collection('messages');
 
@@ -79,6 +114,15 @@ export default class Chat extends React.Component {
         .orderBy('createdAt', 'desc')
         .onSnapshot(this.onCollectionUpdate);
     });
+
+    // console logs the apps connection status 
+    NetInfo.fetch().then(connection => {
+      if (connection.isConnected) {
+        console.log('online');
+      } else {
+        console.log('offline');
+      }
+    });
   }
 
   componentWillUnmount() {
@@ -86,7 +130,7 @@ export default class Chat extends React.Component {
     this.unsubscribe();
     // stops listening for authentication
     this.authUnsubscribe();
-}
+  }
 
   onSend(messages = []) {
     this.setState(previousState => ({
@@ -95,9 +139,12 @@ export default class Chat extends React.Component {
     
     () => {
       this.addMessages(this.state.messages[0]);
+      this.saveMessages();
     })
+
   }
 
+  // adds messages to firebase 
   addMessages = (message) => {
     this.referenceChatMessages.add({
       uid: this.state.uid,
@@ -118,6 +165,18 @@ export default class Chat extends React.Component {
         }}
       />
     )
+  }
+
+  // if app is offline, toolbar isn't rendered 
+  renderInputToolbar(props) {
+    if (this.state.isConnected == false) {
+    } else {
+      return(
+        <InputToolbar
+        {...props}
+        />
+      );
+    }
   }
   
   render() {
