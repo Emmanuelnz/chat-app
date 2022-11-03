@@ -5,6 +5,11 @@ import firebase from 'firebase';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from '@react-native-community/netinfo';
 
+// Actions, user permission required
+import CustomActions from "./CustomActions";
+import MapView from "react-native-maps";
+import { ActionSheetProvider } from "@expo/react-native-action-sheet";
+
 // const firebase = require('firebase');
 // require('firebase/firestore')
 
@@ -14,6 +19,8 @@ export default class Chat extends React.Component {
     this.state = {
       messages: [],
       uid: 0,
+      image: null,
+      location: null,
       user: {
         _id: '',
         name: '',
@@ -46,12 +53,14 @@ export default class Chat extends React.Component {
       let data = doc.data();
       messages.push({
         _id: data._id,
-        text: data.text,
+        text: data.text || "",
         createdAt: data.createdAt.toDate(),
         user: {
           _id: data.user._id,
-          name: data.user.name
-        }
+          name: data.user.name,
+        },
+        image: data.image || null,
+        location: data.location || null,
       });
     });
     this.setState({
@@ -107,7 +116,7 @@ export default class Chat extends React.Component {
         messages: [],
         user: {
           _id: user.uid,
-          name: name
+          name: name,
         },
       });
       this.unsubscribe = this.referenceChatMessages
@@ -140,8 +149,7 @@ export default class Chat extends React.Component {
     () => {
       this.addMessages(this.state.messages[0]);
       this.saveMessages();
-    })
-
+    });
   }
 
   // adds messages to firebase 
@@ -149,9 +157,11 @@ export default class Chat extends React.Component {
     this.referenceChatMessages.add({
       uid: this.state.uid,
       _id: message._id,
-      text: message.text,
+      text: message.text || "",
       createdAt: message.createdAt,
-      user: message.user
+      user: message.user,
+      image: message.image || null,
+      location: message.location || null,
     });
   };
 
@@ -172,11 +182,35 @@ export default class Chat extends React.Component {
     if (this.state.isConnected == false) {
     } else {
       return(
-        <InputToolbar
-        {...props}
+        <InputToolbar {...props} />
+      );
+    }
+  }
+
+  renderCustomActions = (props) => {
+    return <CustomActions {...props} />;
+  };
+
+  renderCustomView(props) {
+    const { currentMessage } = props;
+    if (currentMessage.location) {
+      return (
+        <MapView
+          style={{ 
+            width: 150, 
+            height: 100, 
+            borderRadius: 13, 
+            margin: 3 }}
+          region={{
+            latitude: currentMessage.location.latitude,
+            longitude: currentMessage.location.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }}
         />
       );
     }
+    return null;
   }
   
   render() {
@@ -184,20 +218,25 @@ export default class Chat extends React.Component {
     const { color, name } = this.props.route.params;
     
     return (
+      <ActionSheetProvider>
         <View style={[{ backgroundColor: color }, styles.container]}>
           <GiftedChat
             renderBubble={this.renderBubble.bind(this)}
+            renderInputToolbar={this.renderInputToolbar.bind(this)}
+            renderActions={this.renderCustomActions}
+            renderCustomView={this.renderCustomView}
             messages={this.state.messages}
             onSend={messages => this.onSend(messages)}
             user={{
               _id: this.state.user._id,
-              name: name
+              name: name,
             }}
           />
+
           {/* fixes android issue with keyboard (issue: keyboard hides chat input box) */}
           { Platform.OS === 'android' ? <KeyboardAvoidingView behavior="height" /> : null} 
         </View>
-               
+      </ActionSheetProvider>         
     )
   }
 }
